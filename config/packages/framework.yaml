@@ -3,6 +3,12 @@ framework:
 
     session: false
 
+    exceptions:
+        App\Elasticsearch\Exception\SearchUnavailableException: { status_code: 503 }
+        App\Elasticsearch\Exception\ReservationNotIndexedException: { status_code: 404, log_level: debug }
+        App\Elasticsearch\Exception\ResultWindowExceededException: { status_code: 422, log_level: debug }
+        App\Exception\InvalidSearchCursorException: { status_code: 422, log_level: debug }
+
 when@test:
     framework:
         test: true
