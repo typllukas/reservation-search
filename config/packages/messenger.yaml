@@ -1,0 +1,10 @@
+framework:
+    messenger:
+        transports:
+            sync: 'sync://'
+
+        routing:
+            # the index must be refreshed before the mutation answers
+            'App\Message\ReservationChanged': sync
+            # a nightly batch, so deferring buys nothing; the tombstone covers a failed index delete
+            'App\Message\ReservationsDeleted': sync
