@@ -1,8 +1,22 @@
+services:
+    - class: Architecture\Rules\ReservationWriteCallRule
+      tags: [phpstan.rules.rule]
+    - class: Architecture\Rules\ReservationChangedInstantiationRule
+      tags: [phpstan.rules.rule]
+    - class: Architecture\Rules\ReservationUpdateFlushArgumentRule
+      tags: [phpstan.rules.rule]
+    - class: Architecture\Rules\StringDqlRule
+      tags: [phpstan.rules.rule]
+
 parameters:
     level: 10
     paths:
         - src
         - tests
+        - tools
+    # PHP_CodeSniffer ships its own loader, so composer's autoloader cannot find the sniff interface
+    scanDirectories:
+        - vendor/squizlabs/php_codesniffer/src
     symfony:
         containerXmlPath: var/cache/dev/App_KernelDevDebugContainer.xml
     doctrine:
