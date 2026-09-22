@@ -13,7 +13,7 @@ use Symfony\Component\Uid\Ulid;
 
 #[ORM\Entity(repositoryClass: GuestRepository::class)]
 #[ORM\HasLifecycleCallbacks]
-class Guest
+final class Guest
 {
     use CreatedAtLifecycleCallbacksTrait;
     use UpdatedAtLifecycleCallbacksTrait;

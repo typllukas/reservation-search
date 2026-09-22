@@ -15,7 +15,7 @@ use Symfony\Component\Uid\Ulid;
  */
 #[ORM\Entity(repositoryClass: DeletedReservationRepository::class)]
 #[ORM\Index(name: 'idx_deleted_at', fields: ['deletedAt'])]
-class DeletedReservation
+final class DeletedReservation
 {
     /**
      * The id has to be the deleted reservation's own, the index catch-up deletes by it. Rows are
