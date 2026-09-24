@@ -15,7 +15,7 @@ use Symfony\Component\Uid\Ulid;
  */
 #[ORM\Entity]
 #[ORM\HasLifecycleCallbacks]
-class ReservationRoom
+final class ReservationRoom
 {
     use CreatedAtLifecycleCallbacksTrait;
 

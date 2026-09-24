@@ -21,7 +21,7 @@ use Symfony\Component\Uid\Ulid;
 #[ORM\HasLifecycleCallbacks]
 // no query reads this, bench.sh times a filtered list against it
 #[ORM\Index(name: 'idx_hotel_arrival_status', fields: ['hotel', 'arrival', 'status'])]
-class Reservation
+final class Reservation
 {
     use CreatedAtLifecycleCallbacksTrait;
     use UpdatedAtLifecycleCallbacksTrait;
