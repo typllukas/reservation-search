@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hledání rezervací</title>
+<style>
+:root {
+    --ink: #1b1f23;
+    --ink-soft: #454b52;
+    --muted: #6a737d;
+    --line: #e1e4e8;
+    --line-strong: #cfd4da;
+    --paper: #ffffff;
+    --ground: #f6f7f9;
+    --fill: #e4e7eb;
+    --accent: #0b5fff;
+    --accent-soft: #e7efff;
+    --accent-line: #b9d0ff;
+    --mark: #fff3bf;
+    --ok: #1a7f37;
+    --warn: #9a6700;
+    --bad: #b42318;
+
+    /* open query panel grows into the left margin, --panel-shift keeps it off the window edge */
+    --page: 1180px;
+    --panel: 320px;
+    --panel-shift: 60px;
+    --gap: 22px;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+header {
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    padding: 20px 24px;
+}
+.wrap { max-width: var(--page); margin: 0 auto; }
+h1 { margin: 0 0 2px; font-size: 19px; letter-spacing: -0.01em; }
+.lede { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; }
+input[type=search], input[type=date], select {
+    font: inherit;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    color: inherit;
+}
+.searchbox { position: relative; flex: 1 1 340px; }
+.searchbox input[type=search] { width: 100%; border: 2px solid var(--line-strong); }
+input[type=search]:focus, input[type=date]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.field { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.field input[type=date] { padding: 8px 10px; color: var(--ink); }
+.suggest {
+    position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px);
+    background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(27, 31, 35, 0.12); overflow: hidden;
+}
+.suggest button {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%;
+    padding: 7px 12px; border: 0; background: none; color: inherit; font: inherit;
+    text-align: left; cursor: pointer;
+}
+.suggest button:hover, .suggest button:focus { background: var(--fill); outline: none; }
+.suggest .email { color: var(--muted); font-size: 12.5px; }
+/* pencil icon in place of the arrow, a change here is saved */
+select.status {
+    appearance: none;
+    margin-left: auto; padding: 3px 22px 3px 6px; font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: 0.04em; border-color: currentColor;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%230b5fff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M11.3 2.7l2 2-8 8-2.6.6.6-2.6 8-8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 4px center; background-size: 13px 13px;
+}
+.meta, .why {
+    display: inline-flex; align-items: baseline; gap: 7px;
+    margin: 0; padding: 5px 11px; border-radius: 6px;
+    background: var(--fill); color: var(--ink-soft);
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.meta.busy { opacity: 0.55; }
+.metabar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-top: 10px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+.chips:empty { margin: 0; }
+.chip {
+    display: inline-flex; align-items: baseline; gap: 5px;
+    padding: 3px 9px; border: 1px solid var(--accent-line); border-radius: 999px;
+    background: var(--accent-soft); font-size: 12.5px; color: var(--ink);
+}
+.chip b { color: var(--ink); font-weight: 600; }
+.chip button {
+    border: 0; background: none; color: var(--accent); font: inherit; line-height: 1;
+    padding: 0; cursor: pointer;
+}
+.chip button:hover { color: var(--bad); }
+main { max-width: var(--page); margin: 0 auto; padding: 20px 24px 48px; display: grid; grid-template-columns: 236px 1fr; gap: var(--gap); }
+main:has(.query:not([hidden])) {
+    max-width: calc(var(--page) + var(--panel) + var(--gap));
+    margin-left: auto;
+    margin-right: max(0px, calc(50% - var(--page) / 2 - var(--panel-shift)));
+    grid-template-columns: var(--panel) 236px 1fr;
+}
+@media (max-width: 1100px) { main:has(.query:not([hidden])) { grid-template-columns: 260px 200px 1fr; } }
+@media (max-width: 820px) {
+    main, main:has(.query:not([hidden])) { grid-template-columns: 1fr; }
+    .query { position: static; max-height: none; }
+}
+.results { min-width: 0; max-width: 760px; }
+.facets { display: flex; flex-direction: column; gap: 20px; }
+.facet h2 { margin: 0 0 7px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.facet h2 .cap { text-transform: none; letter-spacing: 0; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.facet button {
+    display: flex; justify-content: space-between; gap: 8px; width: 100%;
+    padding: 5px 8px; margin-bottom: 2px;
+    border: 1px solid transparent; border-radius: 5px;
+    background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.facet button:hover { background: var(--fill); }
+.facet button[aria-pressed=true] { background: var(--accent-soft); border-color: var(--accent-line); font-weight: 600; }
+.facet .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.code { color: var(--muted); font-style: normal; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.facet button[aria-pressed=true] .count { color: var(--accent); }
+.result { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.card { flex: 1 1 0; min-width: 0; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.number { font-weight: 600; font-variant-numeric: tabular-nums; }
+.guest { font-size: 16px; }
+.badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; text-transform: uppercase; letter-spacing: 0.04em; }
+.confirmed { color: var(--ok); }
+.pending { color: var(--warn); }
+.cancelled { color: var(--bad); }
+.unpaid { color: var(--bad); }
+.row2 { margin-top: 5px; color: var(--muted); font-size: 13.5px; display: flex; gap: 14px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.note { margin-top: 7px; font-size: 13.5px; color: #3a4148; }
+mark { background: var(--mark); padding: 0 1px; border-radius: 2px; }
+.more { display: block; width: 100%; padding: 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font: inherit; cursor: pointer; }
+.more:hover { border-color: var(--accent); color: var(--accent); }
+.why { border: 0; cursor: pointer; font-family: inherit; }
+.why:hover { color: var(--accent); }
+.explain { flex-basis: 100%; padding: 10px 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; }
+.explain ul { margin: 2px 0 2px 4px; padding: 0 0 0 10px; list-style: none; border-left: 1px solid var(--line); }
+.explain b { font-variant-numeric: tabular-nums; }
+.explain .unmatched { margin: 0 0 6px; color: var(--bad); }
+/* A zero branch is Lucene bookkeeping, kept visible because it is what _explain said. */
+.explain .zero { color: var(--muted); }
+#queryToggle::after { content: '▾'; font-weight: 400; }
+#queryToggle[aria-expanded=true]::after { content: '▴'; }
+.query { position: sticky; top: 20px; align-self: start; min-width: 0; max-height: calc(100vh - 40px); overflow: auto; }
+.query h2 { margin: 0 0 7px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.query pre { margin: 8px 0 0; padding: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.hint { color: var(--muted); font-size: 13px; text-align: center; padding: 10px; }
+.empty { color: var(--muted); padding: 30px 0; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="wrap">
+        <h1>Hledání rezervací</h1>
+        <p class="lede">Pro recepci a rezervační oddělení: vyhledávání hostů, filtrování výsledků a změna stavu.</p>
+        <div class="controls">
+            <div class="searchbox">
+                <input type="search" id="text" placeholder="jméno hosta, číslo rezervace, telefon, e-mail nebo poznámka" autocomplete="off">
+                <div class="suggest" id="suggest" hidden></div>
+            </div>
+            <div class="field">
+                <span>příjezd od</span>
+                <input type="date" id="arrivalFrom" aria-label="příjezd od">
+                <span>do</span>
+                <input type="date" id="arrivalTo" aria-label="příjezd do">
+            </div>
+            <div class="field">
+                <span>řadit podle</span>
+                <select id="sort" aria-label="řadit podle">
+                    <option value="relevance">relevance</option>
+                    <option value="arrival">příjezdu</option>
+                    <option value="updated">poslední změny</option>
+                </select>
+            </div>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="metabar">
+            <p class="meta" id="meta">Načítám…</p>
+            <button class="why" id="queryToggle" aria-expanded="false" aria-controls="queryPanel">_search body</button>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="query" id="queryPanel" hidden>
+        <h2>_search body</h2>
+        <pre id="queryBody"></pre>
+    </div>
+    <div class="facets" id="facets"></div>
+    <div class="results">
+        <div id="results"></div>
+        <div id="paging"></div>
+    </div>
+</main>
+
+<script>
+const DIMENSIONS = [
+    { key: 'status', title: 'Stav', labels: { confirmed: 'potvrzené', pending: 'čekající', cancelled: 'zrušené' } },
+    { key: 'source', title: 'Zdroj', labels: { travel_agency: 'cestovní agentura', phone: 'telefon', web: 'web' } },
+    { key: 'roomKind', title: 'Typ pokoje', labels: { single: 'jednolůžkový', double: 'dvoulůžkový', apartment: 'apartmán', family: 'rodinný' } },
+    { key: 'hotel', title: 'Hotel', labels: {} },
+];
+
+const ARRIVAL_BOUNDS = [
+    { key: 'arrivalFrom', chipLabel: 'příjezd od' },
+    { key: 'arrivalTo', chipLabel: 'příjezd do' },
+];
+
+const selectedFacetValues = { status: new Set(), source: new Set(), roomKind: new Set(), hotel: new Set() };
+/* nextPageCursor is where the next click continues, shownPageCursor is the one that produced what
+   is on screen; the query panel needs the second. */
+let nextPageCursor = null;
+let shownPageCursor = null;
+
+/* responses can come back out of order, a stale one is dropped */
+let latestSearchTicket = 0;
+let loadedPageCount = 1;
+
+const numbers = new Intl.NumberFormat('cs-CZ');
+const money = new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 });
+const day = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' });
+
+/* new Date('2026-01-15') is midnight UTC and the formatter is local, so west of UTC it shows the day
+   before; the offsetless T00:00 form is parsed as local time. */
+const calendarDay = (dateOnly) => day.format(new Date(dateOnly + 'T00:00'));
+
+/* Czech has three plural forms, 1 noc, 2-4 noci, 5+ nocí; Intl.PluralRules picks the category. */
+const plurals = new Intl.PluralRules('cs-CZ');
+const pluralized = (count, forms) => forms[plurals.select(count)];
+
+/* The _explain tree mixes scores with document counts, so one formatter serves both. */
+const score = new Intl.NumberFormat('cs-CZ', { maximumFractionDigits: 4 });
+
+/* The corpus size, taken from the first search that narrowed nothing, so it survives later ones. */
+let indexedTotal = null;
+let lastResult = null;
+
+/* A page opened on a filtered link never runs a search that narrows nothing, so it asks for the
+   count on its own; one row is the smallest the size range allows. */
+async function loadIndexedTotal() {
+    try {
+        const response = await fetch('/api/reservations?size=1');
+        if (!response.ok) {
+            return;
+        }
+        indexedTotal = (await response.json()).total;
+    } catch {
+        /* the chip falls back to the match count on its own */
+        return;
+    }
+
+    renderMeta();
+}
+
+function renderMeta() {
+    if (lastResult === null) {
+        return;
+    }
+
+    const isNarrowed = indexedTotal !== null && lastResult.total < indexedTotal;
+    const countLabel = isNarrowed
+        ? `${numbers.format(lastResult.total)} z ${numbers.format(indexedTotal)}`
+        : numbers.format(lastResult.total);
+    /* The noun agrees with the number standing closest to it, which is the corpus size once shown. */
+    const lastNumberShown = isNarrowed ? indexedTotal : lastResult.total;
+
+    document.getElementById('meta').textContent =
+        `${countLabel} `
+        + `${pluralized(lastNumberShown, { one: 'rezervace', few: 'rezervace', other: 'rezervací' })}`
+        + ` · ${lastResult.tookMs} ms`;
+}
+
+const escapeHtml = (value) => value.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]);
+
+/* Escape everything and put Elasticsearch's <mark> back; the fragments go into innerHTML. */
+const withMarks = (fragment) => escapeHtml(fragment).replace(/&lt;(\/?)mark&gt;/g, '<$1mark>');
+
+const highlighted = (item, field, fallback) =>
+    item.highlight[field] ? withMarks(item.highlight[field][0]) : escapeHtml(fallback);
+
+/* arrivalFrom after arrivalTo is a 422 from the endpoint */
+function syncArrivalBounds() {
+    document.getElementById('arrivalTo').min = document.getElementById('arrivalFrom').value;
+    document.getElementById('arrivalFrom').max = document.getElementById('arrivalTo').value;
+}
+
+function currentQuery(after) {
+    const parameters = new URLSearchParams();
+    const text = document.getElementById('text').value.trim();
+    if (text !== '') {
+        parameters.set('text', text);
+    }
+    parameters.set('sort', document.getElementById('sort').value);
+    for (const bound of ARRIVAL_BOUNDS) {
+        const date = document.getElementById(bound.key).value;
+        if (date !== '') {
+            parameters.set(bound.key, date);
+        }
+    }
+    for (const dimension of DIMENSIONS) {
+        for (const value of selectedFacetValues[dimension.key]) {
+            parameters.append(dimension.key + '[]', value);
+        }
+    }
+    if (after !== null) {
+        parameters.set('cursor', after);
+    }
+    return parameters;
+}
+
+/* A search with nothing but a sort order counts the whole index, so its total is the corpus size. */
+function isUnfiltered() {
+    const parameters = currentQuery(null);
+    parameters.delete('sort');
+
+    return parameters.size === 0;
+}
+
+/* Labels from the last response, so a hotel chip shows the name rather than the ULID key. */
+const facetLabels = {};
+
+function renderChips() {
+    const text = document.getElementById('text').value.trim();
+    const chips = text === '' ? [] : [`<span class="chip"><b>${escapeHtml(text)}</b></span>`];
+
+    for (const dimension of DIMENSIONS) {
+        for (const value of selectedFacetValues[dimension.key]) {
+            const label = facetLabels[dimension.key]?.[value] ?? dimension.labels[value] ?? value;
+            chips.push(`<span class="chip">${dimension.title.toLowerCase()}: <b>${escapeHtml(label)}</b>`
+                + `<button data-dimension="${dimension.key}" data-value="${escapeHtml(value)}"`
+                + ` aria-label="odebrat filtr ${escapeHtml(label)}">×</button></span>`);
+        }
+    }
+
+    for (const bound of ARRIVAL_BOUNDS) {
+        const date = document.getElementById(bound.key).value;
+        if (date !== '') {
+            chips.push(`<span class="chip">${bound.chipLabel}: <b>${calendarDay(date)}</b>`
+                + `<button data-bound="${bound.key}" aria-label="odebrat filtr ${bound.chipLabel}">×</button></span>`);
+        }
+    }
+
+    document.getElementById('chips').innerHTML = chips.join('');
+}
+
+function renderFacets(facets) {
+    document.getElementById('facets').innerHTML = DIMENSIONS.map((dimension) => {
+        const buckets = facets[dimension.key]?.buckets ?? [];
+        const omitted = facets[dimension.key]?.omittedReservationCount ?? 0;
+        /* Two hotels can share a name down to the city and the chain, so the chip carries the code. */
+        facetLabels[dimension.key] = Object.fromEntries(
+            buckets.filter((bucket) => bucket.label !== null)
+                .map((bucket) => [bucket.value, bucket.code === null ? bucket.label : `${bucket.label} ${bucket.code}`]),
+        );
+        if (buckets.length === 0) {
+            return '';
+        }
+        const options = buckets.map((bucket) => {
+            const label = bucket.label ?? dimension.labels[bucket.value] ?? bucket.value;
+            const isPressed = selectedFacetValues[dimension.key].has(bucket.value);
+            const code = bucket.code === null ? '' : ` <em class="code">${escapeHtml(bucket.code)}</em>`;
+            return `<button aria-pressed="${isPressed}" data-dimension="${dimension.key}" data-value="${escapeHtml(bucket.value)}">`
+                + `<span>${escapeHtml(label)}${code}</span><span class="count">${numbers.format(bucket.count)}</span></button>`;
+        }).join('');
+        /* Without this the twenty commonest hotels read as all 220. */
+        const cap = omitted === 0 ? '' : ` <span class="cap">${buckets.length} nejčastějších</span>`;
+        return `<div class="facet"><h2>${dimension.title}${cap}</h2>${options}</div>`;
+    }).join('');
+}
+
+function renderItems(items, appending) {
+    const cards = items.map((item) => {
+        const paid = item.paid ? '' : '<span class="badge unpaid">nezaplaceno</span>';
+        const note = item.note === null ? '' : `<p class="note">${highlighted(item, 'note', item.note)}</p>`;
+        return `<div class="result">
+            <article class="card">
+                <div class="row1">
+                    <span class="number">${escapeHtml(item.number)}</span>
+                    <span class="guest">${highlighted(item, 'guestName', item.guest.name)}</span>
+                    ${paid}
+                    <select class="status ${item.status}" data-id="${escapeHtml(item.id)}" aria-label="stav rezervace — změna se uloží">
+                        ${statusOptions(item.status)}
+                    </select>
+                </div>
+                <div class="row2">
+                    <span>${highlighted(item, 'hotelName', item.hotel.name)} <em class="code">${escapeHtml(item.hotel.code)}</em></span>
+                    <span>${calendarDay(item.arrival)} – ${calendarDay(item.departure)} · ${item.nights} ${pluralized(item.nights, { one: 'noc', few: 'noci', other: 'nocí' })}</span>
+                    <span>${money.format(item.totalPrice / 100)}</span>
+                    <span>${escapeHtml(item.guest.phone)}</span>
+                </div>
+                ${note}
+            </article>
+            <button class="why" data-explain="${escapeHtml(item.id)}" aria-label="rozklad skóre">_explain</button>
+            <div class="explain" hidden></div>
+        </div>`;
+    }).join('');
+
+    const results = document.getElementById('results');
+    if (appending) {
+        results.insertAdjacentHTML('beforeend', cards);
+        return;
+    }
+    results.innerHTML = cards === '' ? '<p class="empty">Žádná rezervace neodpovídá.</p>' : cards;
+}
+
+function renderPaging(result) {
+    nextPageCursor = result.nextCursor;
+    document.getElementById('paging').innerHTML = result.nextCursor === null
+        ? ''
+        : '<button class="more" id="more">Načíst další</button>';
+}
+
+async function search(after) {
+    /* appending is read after the await, so it cannot be shared state: a filter click during a
+       load more would append a replacement page. */
+    const ticket = ++latestSearchTicket;
+    const appending = after !== null;
+
+    document.getElementById('meta').classList.add('busy');
+
+    let result = null;
+    let failed = false;
+    try {
+        const response = await fetch('/api/reservations?' + currentQuery(after).toString());
+        result = await response.json();
+        failed = !response.ok;
+    } catch {
+        /* a dropped connection or a proxy error page, so there is no problem+json to read */
+        failed = true;
+    }
+
+    if (ticket !== latestSearchTicket) {
+        return;
+    }
+
+    document.getElementById('meta').classList.remove('busy');
+
+    if (failed) {
+        document.getElementById('meta').textContent = result?.detail ?? 'Hledání selhalo.';
+        return;
+    }
+
+    loadedPageCount = appending ? loadedPageCount + 1 : 1;
+    shownPageCursor = after;
+
+    if (!appending && isUnfiltered()) {
+        indexedTotal = result.total;
+    }
+
+    lastResult = result;
+    renderMeta();
+    renderFacets(result.facets);
+    renderChips();
+    renderItems(result.items, appending);
+    renderPaging(result);
+
+    if (!queryPanel.hidden) {
+        loadQuery();
+    }
+}
+
+const STATUS_LABELS = DIMENSIONS.find((dimension) => dimension.key === 'status').labels;
+
+function statusOptions(current) {
+    return Object.entries(STATUS_LABELS)
+        .map(([value, label]) =>
+            `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`)
+        .join('');
+}
+
+/* the PATCH waits for the index refresh, so the search right after shows the new status */
+async function changeStatus(reservationId, status) {
+    let saved = false;
+    try {
+        const response = await fetch('/api/reservations/' + encodeURIComponent(reservationId), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status }),
+        });
+        saved = response.ok;
+    } catch {
+        saved = false;
+    }
+
+    if (!saved) {
+        document.getElementById('meta').textContent = 'Změnu stavu se nepodařilo uložit.';
+        return;
+    }
+
+    const pageCount = loadedPageCount;
+    await search(null);
+    for (let pageIndex = 1; pageIndex < pageCount && nextPageCursor !== null; pageIndex++) {
+        await search(nextPageCursor);
+    }
+}
+
+function explanationTree(node) {
+    const children = node.details.length === 0
+        ? ''
+        : `<ul>${node.details.map((detail) => explanationTree(detail)).join('')}</ul>`;
+
+    const zero = node.value === 0 ? ' class="zero"' : '';
+
+    return `<li${zero}><b>${score.format(node.value)}</b> — ${escapeHtml(node.description)}${children}</li>`;
+}
+
+/* Same parameters as the search that produced this order; a different query would explain a list
+   nobody is looking at. */
+async function explain(reservationId, panel) {
+    panel.textContent = 'Načítám rozklad skóre…';
+
+    let response;
+    try {
+        response = await fetch(
+            `/api/reservations/${encodeURIComponent(reservationId)}/explain?` + currentQuery(null).toString(),
+        );
+    } catch {
+        panel.textContent = 'Rozklad skóre se nepodařilo načíst.';
+        return;
+    }
+
+    if (!response.ok) {
+        const problem = await response.json().catch(() => ({}));
+        panel.textContent = typeof problem.detail === 'string'
+            ? problem.detail
+            : 'Rozklad skóre se nepodařilo načíst.';
+        return;
+    }
+
+    const explanation = await response.json();
+    panel.innerHTML = (explanation.matched ? '' : '<p class="unmatched">Dotazu nevyhovuje, skóre je nula.</p>')
+        + `<ul>${explanationTree(explanation.explanation)}</ul>`;
+}
+
+const queryPanel = document.getElementById('queryPanel');
+const queryToggle = document.getElementById('queryToggle');
+
+async function loadQuery() {
+    try {
+        const response = await fetch('/api/reservations/query-preview?' + currentQuery(shownPageCursor).toString());
+        document.getElementById('queryBody').textContent = JSON.stringify(await response.json(), null, 2);
+    } catch {
+        document.getElementById('queryBody').textContent = 'Tělo dotazu se nepodařilo načíst.';
+    }
+}
+
+queryToggle.addEventListener('click', () => {
+    queryPanel.hidden = !queryPanel.hidden;
+    queryToggle.setAttribute('aria-expanded', String(!queryPanel.hidden));
+    if (!queryPanel.hidden) {
+        loadQuery();
+    }
+});
+
+const suggestBox = document.getElementById('suggest');
+
+function hideSuggestions() {
+    suggestBox.hidden = true;
+    suggestBox.innerHTML = '';
+}
+
+/* The guest index, where a name appears once rather than once per reservation. */
+async function suggest(query) {
+    if (query.length < 2) {
+        hideSuggestions();
+        return;
+    }
+
+    const response = await fetch('/api/guests/suggest?text=' + encodeURIComponent(query));
+    if (!response.ok) {
+        hideSuggestions();
+        return;
+    }
+
+    const guests = await response.json();
+    if (guests.length === 0) {
+        hideSuggestions();
+        return;
+    }
+
+    suggestBox.innerHTML = guests.map((guest) =>
+        `<button data-name="${escapeHtml(guest.name)}">`
+        + `<span>${escapeHtml(guest.name)}</span><span class="email">${escapeHtml(guest.email)}</span>`
+        + '</button>').join('');
+    suggestBox.hidden = false;
+}
+
+/* Read from the URL so a search can be linked and the README screenshot reproduced. */
+const initialParameters = new URLSearchParams(location.search);
+document.getElementById('text').value = initialParameters.get('text') ?? '';
+if (initialParameters.has('sort')) {
+    document.getElementById('sort').value = initialParameters.get('sort');
+}
+for (const dimension of DIMENSIONS) {
+    for (const value of initialParameters.getAll(dimension.key + '[]')) {
+        selectedFacetValues[dimension.key].add(value);
+    }
+}
+for (const bound of ARRIVAL_BOUNDS) {
+    document.getElementById(bound.key).value = initialParameters.get(bound.key) ?? '';
+    document.getElementById(bound.key).addEventListener('change', () => {
+        syncArrivalBounds();
+        search(null);
+    });
+}
+syncArrivalBounds();
+
+let pendingSearch;
+document.getElementById('text').addEventListener('input', (event) => {
+    clearTimeout(pendingSearch);
+    pendingSearch = setTimeout(() => {
+        search(null);
+        suggest(event.target.value.trim());
+    }, 200);
+});
+
+suggestBox.addEventListener('click', (event) => {
+    const option = event.target.closest('button');
+    if (option === null) {
+        return;
+    }
+    document.getElementById('text').value = option.dataset.name;
+    hideSuggestions();
+    search(null);
+});
+
+function focusSuggestion(focusedButton, offset) {
+    const options = [...suggestBox.querySelectorAll('button')];
+    if (options.length === 0) {
+        return;
+    }
+    const nextButton = options[(options.indexOf(focusedButton) + offset + options.length) % options.length];
+    nextButton.focus();
+}
+
+document.getElementById('text').addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' && !suggestBox.hidden) {
+        event.preventDefault();
+        focusSuggestion(null, 1);
+    }
+});
+
+suggestBox.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+        return;
+    }
+    event.preventDefault();
+    focusSuggestion(event.target.closest('button'), event.key === 'ArrowDown' ? 1 : -1);
+});
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        hideSuggestions();
+        document.getElementById('text').focus();
+    }
+});
+
+document.addEventListener('click', (event) => {
+    if (event.target.closest('.searchbox') === null) {
+        hideSuggestions();
+    }
+});
+
+document.getElementById('chips').addEventListener('click', (event) => {
+    const removeButton = event.target.closest('button');
+    if (removeButton === null) {
+        return;
+    }
+    if (removeButton.dataset.bound === undefined) {
+        selectedFacetValues[removeButton.dataset.dimension].delete(removeButton.dataset.value);
+    } else {
+        document.getElementById(removeButton.dataset.bound).value = '';
+        syncArrivalBounds();
+    }
+    search(null);
+});
+
+document.getElementById('results').addEventListener('click', (event) => {
+    const explainButton = event.target.closest('button.why');
+    if (explainButton === null) {
+        return;
+    }
+    const panel = explainButton.closest('.result').querySelector('.explain');
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+        explain(explainButton.dataset.explain, panel);
+    }
+});
+
+document.getElementById('results').addEventListener('change', (event) => {
+    const statusSelect = event.target.closest('select.status');
+    if (statusSelect !== null) {
+        changeStatus(statusSelect.dataset.id, statusSelect.value);
+    }
+});
+document.getElementById('sort').addEventListener('change', () => search(null));
+document.getElementById('facets').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (button === null) {
+        return;
+    }
+    const values = selectedFacetValues[button.dataset.dimension];
+    values.has(button.dataset.value) ? values.delete(button.dataset.value) : values.add(button.dataset.value);
+    search(null);
+});
+document.getElementById('paging').addEventListener('click', (event) => {
+    if (event.target.id === 'more') {
+        search(nextPageCursor);
+    }
+});
+
+if (!isUnfiltered()) {
+    loadIndexedTotal();
+}
+search(null);
+</script>
+
+</body>
+</html>
